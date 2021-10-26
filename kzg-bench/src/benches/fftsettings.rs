@@ -11,15 +11,15 @@ use kzg::{FFTFr, FFTSettings, Fr};
 //     );
 // }
 
-
-fn fft_g1(c: &mut Criterion) {
+/*fn fft_g1(c: &mut Criterion) {
      c.bench_function(
          "fft_g1",
          |b| b.iter(|| {
              TFFTSettings::bench_fft_g1(5)
          })
     );
- }
+ }*/
+
 
 // criterion_group!(benches, fft_fr, fft_g1);
 // criterion_main!(benches);
