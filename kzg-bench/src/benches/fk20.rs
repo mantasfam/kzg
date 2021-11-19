@@ -70,7 +70,7 @@ pub fn fk_single_da_optimized<
     c: &mut Criterion,
     generate_trusted_setup: &dyn Fn(usize, [u8; 32usize]) -> (Vec<TG1>, Vec<TG2>),
 ) {
-    for scale in 5..16 {
+    for scale in 5..10 {
         let coeffs: Vec<u64> = vec![1, 2, 3, 4, 7, 7, 7, 7, 13, 13, 13, 13, 13, 13, 13, 13];
         let poly_len: usize = coeffs.len();
         let n_len: usize = 1 << scale;
@@ -89,7 +89,7 @@ pub fn fk_single_da_optimized<
         let fk = TFK20SingleSettings::new(&ks, 2 * poly_len).unwrap();
 
         // Commit to the polynomial
-        ks.commit_to_poly(&p).unwrap();
+        // ks.commit_to_poly(&p).unwrap();
 
         // Generate the proofs
         let id = format!("bench_fk_single_commit_da_optimized scale: '{}'", scale);
@@ -113,7 +113,8 @@ fn fk_multi_da<
     optimized: bool
 ) {
     let start = if chunk_len == 512 {9} else {4};
-    for i in start..10 {
+    let end = if chunk_len == 512 {10} else {8};
+    for i in start..end {
         let n = 1 << i;
         let vv: Vec<u64> = vec![1, 2, 3, 4, 7, 8, 9, 10, 13, 14, 1, 15, 1, 1000, 134, 33];
 
@@ -147,9 +148,6 @@ fn fk_multi_da<
                 if v_index == 14 { p.set_coeff_at(p_index, &p.get_coeff_at(p_index).negate()); }
             }
         }
-
-        // Commit to the polynomial
-        ks.commit_to_poly(&p).unwrap();
 
         // Compute the multi proofs, assuming that the polynomial will be extended with zeros
         let id = format!("{} scale: '{}'", test_name, width);
