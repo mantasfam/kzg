@@ -3,9 +3,11 @@ use std::convert::TryInto;
 use crate::fk20::reverse_bit_order;
 use crate::poly::KzgPoly;
 use crate::kzg_proofs::KZGSettings;
-use crate::kzg_types::ZkG1Projective;
+use crate::kzg_types::{ZkG1Projective, ZkG2Projective};
 use crate::zkfr::blsScalar;
-use kzg::{G1, Poly, Fr};
+use kzg::{G1, G2, Poly, Fr};
+use crate::curve::g2::G2Affine as ZkG2Affine;
+use crate::fftsettings::ZkFFTSettings;
 
 pub fn bytes_to_bls_field(bytes: &[u8; 32usize]) -> blsScalar {
     blsScalar::from_bytes(bytes).unwrap()
@@ -118,4 +120,70 @@ pub fn evaluate_polynomial_in_evaluation_form(p: &KzgPoly, x: &blsScalar, s: &KZ
     tmp = tmp.sub(&blsScalar::one());
     out = out.mul(&tmp);
     out
+}
+
+pub fn load_trusted_setup(filepath: &str) -> KZGSettings {
+    let mut file = File::open(filepath).expect("Unable to open file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .expect("Unable to read file");
+
+    let mut lines = contents.lines();
+    let length = lines.next().unwrap().parse::<usize>().unwrap();
+    let n2 = lines.next().unwrap().parse::<usize>().unwrap();
+
+    let mut g2_values: Vec<ZkG2Projective> = Vec::new();
+
+    let mut g1_projectives: Vec<ZkG1Projective> = Vec::new();
+
+    for _ in 0..length {
+        let line = lines.next().unwrap();
+        assert!(line.len() == 96);
+        let bytes_array: [u8; 48] = (0..line.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&line[i..i + 2], 16).unwrap())
+            .collect::<Vec<u8>>()
+            .try_into()
+            .unwrap();
+        g1_projectives.push(bytes_to_g1(&bytes_array));
+    }
+
+    for _ in 0..n2 {
+        let line = lines.next().unwrap();
+        assert!(line.len() == 192);
+        let bytes = (0..line.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&line[i..i + 2], 16).unwrap())
+            .collect::<Vec<u8>>();
+        g2_values.push(bytes_to_g2(bytes.as_slice())); //!! TO DO: bytes_to_g2
+    }
+
+    let mut max_scale: usize = 0;
+    while (1 << max_scale) < length {
+        max_scale += 1;
+    }
+
+    let fs = ZkFFTSettings::new(max_scale).unwrap(); 
+
+    let mut g1_values = fs.fft_g1(&g1_projectives, true).unwrap();
+
+    reverse_bit_order(&mut g1_values);
+
+    KZGSettings {
+        secret_g1: g1_values,
+        secret_g2: g2_values,
+        fs,
+    }
+}
+
+
+pub fn verify_kzg_proof(
+    polynomial_kzg: &ZkG1Projective,
+    z: &blsScalar,
+    y: &blsScalar,
+    kzg_proof: &ZkG1Projective,
+    s: &KZGSettings,
+) -> bool {
+    s.check_proof_single(polynomial_kzg, kzg_proof, z, y)
+        .unwrap_or(false)
 }
